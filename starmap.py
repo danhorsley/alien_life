@@ -32,10 +32,10 @@ def create_starmap(df_filt: pd.DataFrame,
         return fig
     
     #debugging output
-    st.write("RA dtype:", df_plot['ra'].dtype, "first values:", df_plot['ra'].head().tolist())
-    st.write("Dec dtype:", df_plot['dec'].dtype, "first values:", df_plot['dec'].head().tolist())
-    st.write("Dist dtype:", df_plot['sy_dist'].dtype, "first values:", df_plot['sy_dist'].head().tolist())
-    st.write("Any NA still present?", df_plot[['ra','dec','sy_dist']].isna().any().any())
+    # st.write("RA dtype:", df_plot['ra'].dtype, "first values:", df_plot['ra'].head().tolist())
+    # st.write("Dec dtype:", df_plot['dec'].dtype, "first values:", df_plot['dec'].head().tolist())
+    # st.write("Dist dtype:", df_plot['sy_dist'].dtype, "first values:", df_plot['sy_dist'].head().tolist())
+    # st.write("Any NA still present?", df_plot[['ra','dec','sy_dist']].isna().any().any())
     
     # Astropy SkyCoord → Cartesian (x,y,z in pc)
     sky = coord.SkyCoord(
