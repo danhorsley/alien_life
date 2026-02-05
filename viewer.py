@@ -28,7 +28,7 @@ df = load_planets()
 # selected_types = st.multiselect("Star Spectral Type", options=df['st_spectype'].dropna().unique(), default=[])
 
 # ── Filters ────────────────────────────────────────────────────────────────
-
+st.header("Exoplanet Host Star Explorer")
 st.subheader("Filters")
 radii = st.slider("Planet Radius (Earth radii)", 0.1, 20.0, (0.5,5.0))
 max_dist = st.slider("Distance from the Sun (pc)", 10, 1000, (10,200))
@@ -93,7 +93,43 @@ else:
 st.caption(f"Showing {len(df_filt)} host stars after all filters")
 
 # ── 3D Star Map ─────────────────────────────────────────────────────────────
+if 'selected_host' not in st.session_state:
+    st.session_state.selected_host = None
 
-st.subheader("3D Interactive Star Map")
+# st.subheader("3D Interactive Star Map")
 fig = create_starmap(df_filt)
-st.plotly_chart(fig, use_container_width=True)
+
+# Render chart with selection
+selected = st.plotly_chart(
+    fig,
+    use_container_width=True,
+    theme="streamlit",
+    on_select="rerun",          # or "ignore" if older Streamlit
+    selection_mode="points"      # enables point click
+)
+
+# Handle selection (Plotly on_select returns dict with points)
+if selected and 'points' in selected and selected['points']:
+    # Get first clicked point (or handle multi if needed)
+    clicked_point = selected['points'][0]
+    # Assuming your hover_name='hostname', or use custom_data if you add it
+    selected_hostname = clicked_point.get('hovertext') or clicked_point.get('text') or clicked_point.get('customdata', [None])[0]
+    
+    if selected_hostname:
+        st.session_state.selected_host = selected_hostname
+
+# Show blurb box below
+st.subheader("Selected Star Spotlight")
+if st.session_state.selected_host:
+    # Find the row
+    selected_row = df_filt[df_filt['hostname'] == st.session_state.selected_host]
+    if not selected_row.empty:
+        blurb = selected_row['blurb'].iloc[0]
+        st.markdown(blurb)
+        if st.button("Clear selection"):
+            st.session_state.selected_host = None
+            st.rerun()
+    else:
+        st.info("No details found for that star — try another point!")
+else:
+    st.info("Click a star in the map to learn more about it! 🌟")

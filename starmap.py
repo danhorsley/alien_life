@@ -45,17 +45,18 @@ def create_starmap(df_filt: pd.DataFrame,
 
     df_hosts = df_plot.groupby('hostname').agg(host_agg).reset_index()
     # 
+    
+    
+    
 
+    df_hosts['fun_blurb'] = df_hosts.apply(generate_blurbs, axis=1)
+
+    df_hosts['blurb'] = df_hosts.apply(generate_blurbs, axis=1)
+    
     if df_hosts.empty:
         fig = px.scatter_3d(pd.DataFrame(), x=[0], y=[0], z=[0],
                             title="No valid coordinates")
         return fig
-    
-    #debugging output
-    # st.write("RA dtype:", df_plot['ra'].dtype, "first values:", df_plot['ra'].head().tolist())
-    # st.write("Dec dtype:", df_plot['dec'].dtype, "first values:", df_plot['dec'].head().tolist())
-    # st.write("Dist dtype:", df_plot['sy_dist'].dtype, "first values:", df_plot['sy_dist'].head().tolist())
-    # st.write("Any NA still present?", df_plot[['ra','dec','sy_dist']].isna().any().any())
     
     # Astropy SkyCoord → Cartesian (x,y,z in pc)
     sky = coord.SkyCoord(
@@ -111,7 +112,8 @@ def create_starmap(df_filt: pd.DataFrame,
         ),
         showlegend=True,
         template="plotly_dark",          # or "plotly"
-        margin=dict(l=0, r=0, b=0, t=50)
+        margin=dict(l=0, r=0, b=0, t=50),
+        title = title
     )
 
     # Add Sun at origin
@@ -146,3 +148,53 @@ def add_host_labels(fig: px.scatter_3d, df_hosts: pd.DataFrame,
         hoverinfo='skip',                  # no extra hover on labels
         showlegend=False                   # no legend entry
     )   
+    
+# create blurb for click listener on plot
+def generate_blurbs(row):
+    # Constants (updated Feb 2026: Parker Solar Probe holds ~692,000 km/h record)
+    FASTEST_SPEED_KMH = 692000          # Parker Solar Probe peak (Dec 2024 onward)
+    HOURS_PER_YEAR = 8760               # approx
+    LIGHT_YEAR_KM = 9.46073e12          # exact-ish value
+    hostname = row['hostname']
+    spt = row.get('st_spectype', 'mysterious').upper()
+    num_pl = row['sy_pnum'] if pd.notna(row['sy_pnum']) else 0
+    pl_list = row['pl_name'] if pd.notna(row['pl_name']) else "none known yet"
+    dist_pc = row['sy_dist']
+    dist_ly = dist_pc / 3.08568          # pc to light-years (approx 1 pc = 3.08568 ly)
+    
+    # Rough travel time (one-way, no relativity or acceleration fanciness)
+    distance_km = dist_ly * LIGHT_YEAR_KM
+    speed_km_per_year = FASTEST_SPEED_KMH * HOURS_PER_YEAR
+    travel_years = int(distance_km / speed_km_per_year) if speed_km_per_year > 0 else "way too long"
+    
+    # Spectral flavor
+    if spt.startswith('M'):
+        star_desc = "a chill red dwarf that's basically immortal (trillions of years potential lifespan)"
+    elif spt.startswith('K'):
+        star_desc = "a cozy orange dwarf — long-lived and pretty forgiving for planets"
+    elif spt.startswith('G'):
+        star_desc = "a proper Sun-like yellow star (the classic 'Goldilocks' host)"
+    elif spt.startswith('F'):
+        star_desc = "a bright white-yellow hotshot (shorter life but dazzling)"
+    else:
+        star_desc = "an intriguing star of type " + spt
+    
+    # HZ cheek
+    hz_status = "probably not — wrong orbit or too extreme" 
+    if row.get('potentially_habitable', False):
+        hz_status = "At least one might be in the sweet spot for liquid water 🌊 (fingers crossed for aliens)"
+    
+    blurb = f"""
+            **{hostname}**  
+
+            This {star_desc} is approximately {dist_ly:.1f} light-years from us.  
+
+            It has **{num_pl} planet{'s' if num_pl != 1 else ''}** ({pl_list}).  
+
+            Habitable zone? {hz_status}  
+
+            Getting there with today's fastest spacecraft tech (Parker Solar Probe speeds ~692,000 km/h)?  
+            Roughly **{travel_years:,} years** one-way. Better bring a really good book... or wait for that warp drive breakthrough. 🚀😅
+            """
+
+    return blurb
