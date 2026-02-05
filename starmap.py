@@ -1,57 +1,99 @@
-import pandas as pd
 import streamlit as st
+import pandas as pd
 import plotly.express as px
-from poliastro.bodies import Earth, Sun
-from poliastro.twobody import Orbit
-from poliastro.plotting import OrbitPlotter2D
-from astropy.time import Time
+import astropy.coordinates as coord
 import astropy.units as u
 
-def create_startmap(df_filt : pd.DataFrame, selected_planet: str) -> 'px.graph_objs._figure.Figure':
-    if not df_filt.empty:
-        row = df_filt[df_filt['pl_name'] == selected_planet].iloc[0]
+def create_starmap(df_filt: pd.DataFrame,
+                   color_by: str = 'st_spectype',
+                   size_by: str = 'st_rad',
+                   title: str = "3D Interactive Star Map (Heliocentric)") -> px.scatter_3d:
+    """
+    Creates a 3D scatter plot of host stars from filtered exoplanet data.
+    - Converts RA/Dec + distance to Cartesian x/y/z (pc)
+    - Color/size toggles via input params
+    - Returns Plotly figure for st.plotly_chart
+    """
+    if df_filt.empty:
+        fig = px.scatter_3d(pd.DataFrame(), x=[0], y=[0], z=[0],
+                            title="No stars match filters")
+        return fig
 
-        try:
-            # Earth reference orbit (circular at 1 AU)
-            earth_orb = Orbit.circular(Sun, 1 * u.AU)
+    # Ensure numeric columns
+    for col in ['ra', 'dec', 'sy_dist']:
+        if col in df_filt.columns:
+            df_filt[col] = pd.to_numeric(df_filt[col], errors='coerce').astype('float64')
 
-            # Planet orbit from real elements (fallback if missing)
-            a = row.get('pl_orbsmax', 1.0) * u.AU
-            ecc = row.get('pl_orbeccen', 0.0) * u.one
-            inc = row.get('pl_orbincl', 0.0) * u.deg if 'pl_orbincl' in row else 0 * u.deg
+    df_plot = df_filt.dropna(subset=['ra', 'dec', 'sy_dist']).copy()
 
-            planet_orb = Orbit.from_classical(
-                Sun,
-                a=a,
-                ecc=ecc,
-                inc=inc,
-                raan=0 * u.deg,    # placeholder
-                argp=0 * u.deg,    # placeholder
-                nu=0 * u.deg,
-                epoch=Time.now()
-            )
+    if df_plot.empty:
+        fig = px.scatter_3d(pd.DataFrame(), x=[0], y=[0], z=[0],
+                            title="No valid coordinates")
+        return fig
+    
+    #debugging output
+    st.write("RA dtype:", df_plot['ra'].dtype, "first values:", df_plot['ra'].head().tolist())
+    st.write("Dec dtype:", df_plot['dec'].dtype, "first values:", df_plot['dec'].head().tolist())
+    st.write("Dist dtype:", df_plot['sy_dist'].dtype, "first values:", df_plot['sy_dist'].head().tolist())
+    st.write("Any NA still present?", df_plot[['ra','dec','sy_dist']].isna().any().any())
+    
+    # Astropy SkyCoord → Cartesian (x,y,z in pc)
+    sky = coord.SkyCoord(
+        ra=df_plot['ra'].values * u.deg,           # ← .make sure vector in correct format
+        dec=df_plot['dec'].values * u.deg,
+        distance=df_plot['sy_dist'].values * u.pc,
+        frame='icrs'
+    )
 
-            # Plot with explicit colors
-            plotter = OrbitPlotter2D()
-            plotter.plot(earth_orb, label="Earth (1 AU)", color="blue")
-            plotter.plot(planet_orb, label=selected_planet, color="orange")
+    df_plot['x'] = sky.cartesian.x.to(u.pc).value
+    df_plot['y'] = sky.cartesian.y.to(u.pc).value
+    df_plot['z'] = sky.cartesian.z.to(u.pc).value
 
-            # Get the Plotly figure object
-            fig = plotter._figure  # ← this is the correct attribute (not .fig)
+    # Color & size columns (with fallbacks)
+    color_col = color_by if color_by in df_plot.columns else 'st_spectype'
+    size_col  = size_by  if size_by  in df_plot.columns else 'st_rad'
 
-            # Optional: customize
-            fig.update_layout(
-                title=f"2D Orbit of {selected_planet} (Earth reference)",
-                showlegend=True,
-                template="plotly_dark"  # or "plotly"
-            )
+    # 3D Scatter
+    fig = px.scatter_3d(
+        df_plot,
+        x='x', y='y', z='z',
+        color=color_col,
+        size=size_col,
+        hover_name='hostname',
+        hover_data=['pl_name', 'sy_dist', 'st_teff', 'st_spectype', 'st_mass', 'st_rad'],
+        title=title,
+        labels={
+            'x': 'X (pc)',
+            'y': 'Y (pc)',
+            'z': 'Z (pc)'
+        },
+        opacity=0.8,
+        size_max=30
+    )
 
-            st.plotly_chart(fig, use_container_width=True)
+    # Make it look nice
+    fig.update_layout(
+        scene=dict(
+            xaxis_title='X (pc)',
+            yaxis_title='Y (pc)',
+            zaxis_title='Z (pc)',
+            aspectmode='cube',           # equal scale
+            bgcolor='rgba(0,0,0,0)'      # transparent bg if dark theme
+        ),
+        showlegend=True,
+        template="plotly_dark",          # or "plotly"
+        margin=dict(l=0, r=0, b=0, t=50)
+    )
 
-        except Exception as e:
-            st.warning(f"Couldn't plot orbit for {selected_planet}: {e}")
-            st.info("Missing or invalid orbital elements (a, e, i).")
-    else:
-        st.info("No planets match your filters.")
+    # Add Sun at origin
+    fig.add_scatter3d(
+        x=[0], y=[0], z=[0],
+        mode='markers',
+        marker=dict(size=8, color='yellow', symbol='diamond'),
+        name='Sun (origin)',
+        hoverinfo='name'
+    )
+
+    return fig
     
     

@@ -36,4 +36,7 @@ df_filt = df[
     (df['pl_eqt'].between(*temp_range))
 ] 
 
-create_startmap(df_filt, selected_types[0] if selected_types else df_filt['pl_name'].iloc[0] if not df_filt.empty else "")
+# ── 3D Star Map ─────────────────────────────────────────────────────────────
+
+st.subheader("3D Interactive Star Map")
+create_starmap(df_filt)
