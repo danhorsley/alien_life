@@ -42,23 +42,40 @@ df_pre_filt = df[
 ]
 
 #computing available spectral types for filtering
-available_types = sorted(df_pre_filt['st_spectype'].dropna().unique())
 
+
+available_types = sorted(df_pre_filt['st_spectype'].dropna().unique())
 # If no data left → show message or empty list
 if len(available_types) == 0:
     available_types = []
     st.info("No stars match the current radius / distance / temp filters.")
 
-# Multiselect with dynamic options
-selected_types = st.multiselect(
-    "Star Spectral Type",
-    options=available_types,
-    default=[],  #placeholder default, could be empty or based on available_types - can also format other spectral types better if needed
-    )
+spectral_groups = st.multiselect(
+    "Star Spectral Group",
+    options=["F-type", "G-type", "K-type", "M-type", "Giants / Evolved", "Other"],
+    default=["K-type", "M-type"]  # defaults for exoplanets
+)
+
+mask = pd.Series(False, index=df_pre_filt.index)
+
+if "F-type" in spectral_groups:
+    mask |= df_pre_filt['st_spectype'].str.upper().str.startswith('F')
+if "G-type" in spectral_groups:
+    mask |= df_pre_filt['st_spectype'].str.upper().str.startswith('G')
+if "K-type" in spectral_groups:
+    mask |= df_pre_filt['st_spectype'].str.upper().str.startswith('K')
+if "M-type" in spectral_groups:
+    mask |= df_pre_filt['st_spectype'].str.upper().str.startswith('M')
+if "Giants / Evolved" in spectral_groups:
+    mask |= df_pre_filt['st_spectype'].str.contains('III|IV|giant|evolved', case=False, na=False)
+if "Other" in spectral_groups:
+    mask |= ~df_pre_filt['st_spectype'].str.startswith(('F', 'G', 'K', 'M'), na=False) & ~df_pre_filt['st_spectype'].str.contains('III|IV|giant|evolved', case=False, na=False)
+
+selected_types = df_pre_filt.loc[mask, 'st_spectype'].dropna().unique()
 
 # Final filtered df: apply spectral type on top of pre-filter
-if selected_types:
-    df_filt = df_pre_filt[df_pre_filt['st_spectype'].isin(selected_types)]
+if selected_types.any():
+    df_filt = df_pre_filt[mask]
 else:
     df_filt = df_pre_filt.copy()  
 
