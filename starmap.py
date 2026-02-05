@@ -25,8 +25,27 @@ def create_starmap(df_filt: pd.DataFrame,
             df_filt[col] = pd.to_numeric(df_filt[col], errors='coerce').astype('float64')
 
     df_plot = df_filt.dropna(subset=['ra', 'dec', 'sy_dist']).copy()
+    
+    # Aggregate per unique host
+    host_agg = {
+        'ra': 'first',
+        'dec': 'first',
+        'sy_dist': 'first',
+        'st_spectype': 'first',  # or mode/any if varies (rare)
+        'st_teff': 'first',
+        'st_mass': 'first',
+        'st_rad': 'first',
+        # Planet aggregates
+        'pl_name': lambda x: ', '.join(sorted(x.dropna().unique())),  # comma-separated unique planet names
+        'sy_pnum': 'size',                                       # count of planets
+        'disc_year': 'min'                                        # earliest discovery date
+        # Add more if needed, e.g. 'pl_rade': list for all radii
+    }
 
-    if df_plot.empty:
+    df_hosts = df_plot.groupby('hostname').agg(host_agg).reset_index()
+    # 
+
+    if df_hosts.empty:
         fig = px.scatter_3d(pd.DataFrame(), x=[0], y=[0], z=[0],
                             title="No valid coordinates")
         return fig
@@ -39,28 +58,37 @@ def create_starmap(df_filt: pd.DataFrame,
     
     # Astropy SkyCoord → Cartesian (x,y,z in pc)
     sky = coord.SkyCoord(
-        ra=df_plot['ra'].values * u.deg,           # ← .make sure vector in correct format
-        dec=df_plot['dec'].values * u.deg,
-        distance=df_plot['sy_dist'].values * u.pc,
-        frame='icrs'
+    ra=df_hosts['ra'].values * u.deg,
+    dec=df_hosts['dec'].values * u.deg,
+    distance=df_hosts['sy_dist'].values * u.pc,
+    frame='icrs'
     )
 
-    df_plot['x'] = sky.cartesian.x.to(u.pc).value
-    df_plot['y'] = sky.cartesian.y.to(u.pc).value
-    df_plot['z'] = sky.cartesian.z.to(u.pc).value
-
-    # Color & size columns (with fallbacks)
-    color_col = color_by if color_by in df_plot.columns else 'st_spectype'
-    size_col  = size_by  if size_by  in df_plot.columns else 'st_rad'
+    df_hosts['x'] = sky.cartesian.x.to(u.pc).value
+    df_hosts['y'] = sky.cartesian.y.to(u.pc).value
+    df_hosts['z'] = sky.cartesian.z.to(u.pc).value
+    
+    # Color & size (using host-level cols)
+    color_col = color_by if color_by in df_hosts else 'st_spectype'
+    size_col  = size_by  if size_by  in df_hosts else 'st_rad'
 
     # 3D Scatter
     fig = px.scatter_3d(
-        df_plot,
+        df_hosts,
         x='x', y='y', z='z',
         color=color_col,
         size=size_col,
         hover_name='hostname',
-        hover_data=['pl_name', 'sy_dist', 'st_teff', 'st_spectype', 'st_mass', 'st_rad'],
+        hover_data=[
+            'pl_name',           # now aggregated
+            'sy_pnum',
+            'disc_year',      # format as needed
+            'sy_dist',
+            'st_teff',
+            'st_spectype',
+            'st_mass',
+            'st_rad'
+        ],
         title=title,
         labels={
             'x': 'X (pc)',
@@ -96,4 +124,24 @@ def create_starmap(df_filt: pd.DataFrame,
 
     return fig
     
-    
+def add_host_labels(fig: px.scatter_3d, df_hosts: pd.DataFrame,
+                    text_col: str = 'hostname',
+                    font_size: int = 10,
+                    color: str = 'white',
+                    position: str = 'top center') -> None:
+    """
+    Adds a text-only trace for permanent labels next to each host point.
+    - Modifies fig in-place.
+    - Optional: make toggleable later via a param.
+    """
+    fig.add_scatter3d(
+        x=df_hosts['x'],
+        y=df_hosts['y'],
+        z=df_hosts['z'],
+        mode='text',
+        text=df_hosts[text_col],
+        textposition=position,             # options: 'top center', 'bottom right', etc.
+        textfont=dict(size=font_size, color=color),
+        hoverinfo='skip',                  # no extra hover on labels
+        showlegend=False                   # no legend entry
+    )   
