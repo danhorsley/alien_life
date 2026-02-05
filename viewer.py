@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from starmap import *
 
 
 @st.cache_data
@@ -34,3 +35,5 @@ df_filt = df[
     (df['sy_dist'] <= max_dist) &
     (df['pl_eqt'].between(*temp_range))
 ] 
+
+create_startmap(df_filt, selected_types[0] if selected_types else df_filt['pl_name'].iloc[0] if not df_filt.empty else "")
