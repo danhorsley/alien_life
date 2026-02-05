@@ -7,7 +7,8 @@ import astropy.units as u
 def create_starmap(df_filt: pd.DataFrame,
                    color_by: str = 'st_spectype',
                    size_by: str = 'st_rad',
-                   title: str = "3D Interactive Star Map (Heliocentric)") -> px.scatter_3d:
+                   title: str = "Heliocentric 3D Interactive Star Map"
+                   ) -> px.scatter_3d:
     """
     Creates a 3D scatter plot of host stars from filtered exoplanet data.
     - Converts RA/Dec + distance to Cartesian x/y/z (pc)

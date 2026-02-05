@@ -30,14 +30,14 @@ df = load_planets()
 # ── Filters ────────────────────────────────────────────────────────────────
 
 st.subheader("Filters")
-min_radius = st.slider("Min Planet Radius (Earth radii)", 0.1, 20.0, 0.5)
-max_dist = st.slider("Max Distance (pc)", 10, 1000, 200)
+radii = st.slider("Planet Radius (Earth radii)", 0.1, 20.0, (0.5,5.0))
+max_dist = st.slider("Distance from the Sun (pc)", 10, 1000, (10,200))
 temp_range = st.slider("Planet Equilibrium Temp (K)", 100, 600, (200, 400))
 
 # Apply the non-spectral filters
 df_pre_filt = df[
-    (df['pl_rade'] >= min_radius) &
-    (df['sy_dist'] <= max_dist) &
+    (df['pl_rade'].between(*radii)) &
+    (df['sy_dist'].between(*max_dist)) &
     (df['pl_eqt'].between(*temp_range))
 ]
 
@@ -55,6 +55,17 @@ spectral_groups = st.multiselect(
     options=["F-type", "G-type", "K-type", "M-type", "Giants / Evolved", "Other"],
     default=["K-type", "M-type"]  # defaults for exoplanets
 )
+with st.expander("Goldilocks Zone (Habitable Zone) Quick Guide", expanded=False):
+    st.markdown(f"""
+    The **habitable zone** is where liquid water could exist on a planet's surface (rough rules of thumb for main-sequence stars):
+
+    - **F-type** (hotter stars): ~1.0–2.5 AU from star
+    - **G-type** (Sun-like): ~0.9–1.4 AU
+    - **K-type** (orange dwarfs): ~0.2–0.8 AU
+    - **M-type** (red dwarfs): ~0.01–0.1 AU (very close orbits!)
+
+    Your planet equilibrium temp filter set to ({temp_range[0]}–{temp_range[1]} K at the moment) already proxies this somewhat — Earth-like ~255 K, but atmospheres/greenhouse push real HZ outward.
+    """)
 
 mask = pd.Series(False, index=df_pre_filt.index)
 
@@ -79,7 +90,7 @@ if selected_types.any():
 else:
     df_filt = df_pre_filt.copy()  
 
-st.caption(f"Showing {len(df_filt)} planets / host stars after all filters")
+st.caption(f"Showing {len(df_filt)} host stars after all filters")
 
 # ── 3D Star Map ─────────────────────────────────────────────────────────────
 
